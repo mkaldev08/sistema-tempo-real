@@ -1,29 +1,41 @@
-## Makefile — compila e corre dentro de um contentor Linux (gcc:latest).
-## Necessário porque clock_nanosleep/TIMER_ABSTIME não existem em macOS.
-##
-## Alvos disponíveis:
-##   make          — compila
-##   make run      — compila e corre (5 ciclos)
-##   make run-rt   — compila e corre com sudo dentro do contentor (SCHED_FIFO real)
-##   make clean    — remove o binário local (se existir)
+#TODO: create a make file compatible with ubuntu gcc compiler
+# Variáveis de Configuração
+CC = gcc
+CFLAGS = -O2 -Wall
+LIBS = -lpthread
+TARGET = simulador_rt
+SRC = main.c
 
-SRC      := main.c
-BIN      := tarefas_tempo_real
-CFLAGS   := -O2 -Wall -Wextra -pthread
-DOCKER   := docker run --rm -v "$(CURDIR)":/src -w /src gcc:latest
+# Quantidade padrão de ciclos (caso o usuário não passe no terminal)
+CICLOS ?= 50
 
-.PHONY: all run run-rt clean
+.PHONY: all clean run run-rt
 
-all:
-	$(DOCKER) gcc $(CFLAGS) -o $(BIN) $(SRC)
+# 1. Alvo padrão: Compilar o programa
+all: $(TARGET)
 
-run: all
-	$(DOCKER) ./$(BIN) --ciclos 5
+$(TARGET): $(SRC)
+	@echo "Compilando $(SRC) com otimização -O2..."
+	$(CC) $(CFLAGS) $(SRC) -o $(TARGET) $(LIBS)
+	@echo "Compilação concluída com sucesso!"
 
-## Para SCHED_FIFO real é preciso --privileged (CAP_SYS_NICE dentro do contentor)
-run-rt: all
-	docker run --rm --privileged -v "$(CURDIR)":/src -w /src gcc:latest \
-		./$(BIN) --ciclos 5
+# 2. Executar SEM sudo (Apenas permissões normais - SCHED_OTHER)
+run: $(TARGET)
+	@echo "--------------------------------------------------------"
+	@echo "Executando SEM privilégios de root (Modo Normal)"
+	@echo "Ciclos configurados: $(CICLOS)"
+	@echo "--------------------------------------------------------"
+	./$(TARGET) --ciclos $(CICLOS) --verbose
 
+# 3. Executar COM sudo (Modo Tempo Real Real - SCHED_FIFO)
+run-rt: $(TARGET)
+	@echo "--------------------------------------------------------"
+	@echo "Executando COM privilégios de root (Modo Real-Time)"
+	@echo "Ciclos configurados: $(CICLOS)"
+	@echo "--------------------------------------------------------"
+	sudo ./$(TARGET) --ciclos $(CICLOS) --verbose
+
+# Limpar arquivos gerados
 clean:
-	rm -f $(BIN)
+	@echo "Limpando o executável..."
+	rm -f $(TARGET)
